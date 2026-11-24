@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>MAR Desktop</title><link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">MAR <span>Điều khiển robot</span></div>
+    <nav aria-label="Điều hướng">
+      <button class="nav-item active" data-tab="connect" aria-current="page">Kết nối</button>
+      <button class="nav-item" data-tab="run">Sử dụng robot</button>
+      <button class="nav-item" data-tab="network">Đổi Wi-Fi</button>
+      <button class="nav-item" data-tab="logs">Hỗ trợ</button>
+    </nav>
+    <div class="sidebar-bottom"><div class="sidebar-device"><span class="device-light" id="sideLight"></span><div><span id="sideRobot">Chưa kết nối</span><small id="sideHost">Bật robot để bắt đầu</small></div></div><small id="version">MAR Desktop</small></div>
+  </aside>
+  <main>
+    <header><b id="pageTitle">Kết nối</b><div class="header-right"><span class="chip neutral" id="sshBadge">Chưa kết nối robot</span><button class="button danger small" id="stopRobot" hidden>Dừng robot</button></div></header>
+    <div class="content">
+      <div id="notice" role="status" aria-live="polite" hidden><span id="noticeText"></span><button class="inline-link" id="noticeAction" hidden></button></div>
+      <section class="page active" id="page-connect" aria-labelledby="connectTitle">
+        <div class="page-heading"><div><h1 id="connectTitle">Kết nối robot</h1><p>Bật robot và kết nối máy tính vào cùng mạng Wi-Fi với robot.</p></div></div>
+        <div class="connection-summary"><span>Wi-Fi máy tính: <strong id="laptopSsid">Đang kiểm tra…</strong></span><small id="laptopDetail"></small></div>
+        <div class="columns connection-columns">
+          <article class="card">
+            <div class="card-heading"><div><h2>Robot của bạn</h2><p>Nhập mật khẩu kết nối do người quản lý robot cung cấp.</p></div></div>
+            <form id="sshForm">
+              <label>Địa chỉ robot<input id="host" required placeholder="Ví dụ: raspberrypi.local" autocomplete="off"><span class="field-help">Dùng địa chỉ đã lưu hoặc chọn thiết bị trong danh sách bên cạnh.</span></label>
+              <label>Mật khẩu kết nối<input id="sshPassword" type="password" autocomplete="off" placeholder="Mật khẩu robot"></label>
+              <details class="plain-details"><summary>Tùy chọn kết nối nâng cao</summary>
+                <div class="field-row"><label class="grow">Tài khoản trên robot<input id="sshUser" value="pi" autocomplete="username" required></label><label class="port-field">Cổng SSH<input id="port" type="number" min="1" max="65535" value="22" required></label></div>
+                <label>Khóa SSH thay cho mật khẩu<div class="key-row"><input id="keyPath" readonly placeholder="Chưa chọn khóa"><button class="button secondary small" id="pickKey" type="button">Chọn file</button><button class="text-button" id="clearKey" type="button">Bỏ chọn</button></div></label>
+                <label>Mật khẩu của khóa SSH<input id="keyPassphrase" type="password" autocomplete="off" placeholder="Chỉ nhập nếu khóa có mật khẩu"></label>
+              </details>
+              <div class="form-actions"><button class="button primary" id="connectRobot" type="submit">Kết nối robot</button></div>
+            </form>
+            <div id="connectedPanel" hidden>
+              <dl class="status-detail"><div><dt>Robot</dt><dd id="robotName">MentorPi</dd></div><div><dt>Địa chỉ</dt><dd id="robotAddress">—</dd></div><div><dt>Hoạt động</dt><dd id="stackState">Đang kiểm tra…</dd></div></dl>
+              <p id="stackDetail"></p>
+              <div class="next-step"><button class="button primary" id="continueToRun" data-goto="run">Tiếp tục</button><button class="text-button" id="refreshRobot" type="button">Cập nhật trạng thái</button><button class="text-button" id="disconnectRobot" type="button">Ngắt kết nối</button></div>
+            </div>
+          </article>
+          <article class="card discovery-card"><div class="card-heading"><div><h2>Tìm thiết bị trên mạng</h2><p>Nếu chưa biết địa chỉ robot, tìm trong mạng Wi-Fi hiện tại.</p></div></div><button class="button secondary" id="discover">Tìm robot</button><div id="discoveryList" class="empty-state"><p>Thiết bị tìm thấy sẽ hiện ở đây.</p></div></article>
+        </div>
+        <div class="setup-notice"><span>Robot chưa kết nối Wi-Fi này?</span><button class="inline-link" data-goto="network">Thiết lập Wi-Fi cho robot</button></div>
+        <details class="plain-details technical-info"><summary>Cài đặt dành cho kỹ thuật viên</summary><div class="field-row"><label class="grow">Container<input id="container" value="MentorPi"></label><label class="grow wide">Thư mục dự án trong container<input id="projectPath" value="/home/ubuntu/mediassist-mqtt-2026-10-08"></label></div><button class="button secondary small" id="saveSettings">Lưu cài đặt</button></details>
+      </section>
+      <section class="page" id="page-run" aria-labelledby="runTitle">
+        <div class="page-heading"><div><h1 id="runTitle">Sử dụng robot</h1><p>Chọn bản đồ có sẵn để làm việc, hoặc tạo bản đồ cho khu vực mới.</p></div><button class="button secondary" id="cloudRefresh">Cập nhật</button></div>
+        <div class="setup-notice" id="connectRequired"><span>Kết nối robot trước khi bắt đầu.</span><button class="inline-link" data-goto="connect">Đến phần kết nối</button></div>
+        <article class="card cloud-card">
+          <div class="card-heading"><div><h2>Tài khoản quản lý</h2><p id="cloudIdentity">Đăng nhập để xem danh sách bản đồ.</p></div><span class="chip neutral" id="cloudBadge">Chưa đăng nhập</span></div>
+          <form id="loginForm"><div class="field-row"><label class="grow">Tên đăng nhập<input id="adminUser" autocomplete="username" required></label><label class="grow">Mật khẩu<input id="adminPassword" type="password" autocomplete="off" required></label><button class="button primary login-button" type="submit">Đăng nhập</button></div><details class="plain-details"><summary>Cài đặt máy chủ</summary><label>Địa chỉ hệ thống<input id="baseUrl" type="url" value="https://mediassistrover.duckdns.org" required></label></details></form>
+          <button class="text-button" id="logout" hidden>Đăng xuất</button>
+        </article>
+        <div id="runSetup" hidden>
+          <article class="card run-card">
+            <div class="field-row"><label class="grow" id="robotField">Robot<select id="robotSelect"><option value="">Chưa có robot</option></select></label><div class="grow"><h2>Trạng thái robot</h2><p class="readiness" id="readiness" aria-live="polite">Đang kiểm tra…</p></div></div>
+            <div class="mode-selector" role="group" aria-label="Cách sử dụng"><button class="mode active" data-mode="navigation" aria-pressed="true"><div><b>Sử dụng bản đồ có sẵn</b><small>Chọn khu vực robot đã được thiết lập.</small></div><i aria-hidden="true">✓</i></button><button class="mode" data-mode="mapping" aria-pressed="false"><div><b>Tạo bản đồ mới</b><small>Quét và lưu một khu vực mới.</small></div><i aria-hidden="true">✓</i></button></div>
+            <div id="navigationOptions">
+              <div class="field-row"><label class="grow wide">Bản đồ<select id="mapSelect"><option value="">Chưa tải bản đồ</option></select></label><label class="grow">Thùng hàng trên robot<select id="loadProfile"><option value="cargo">Đang gắn thùng</option><option value="bare">Không gắn thùng</option></select></label></div>
+              <p id="navigationCatalogHint" class="field-help" hidden>Chưa có bản đồ đang sử dụng. Chọn “Tạo bản đồ mới” hoặc nhờ người quản lý kiểm tra.</p>
+              <details class="plain-details"><summary>Tùy chọn cho lần sử dụng này</summary><label>Thời gian sử dụng<select id="duration"><option value="7200">2 giờ</option><option value="14400">4 giờ</option><option value="28800">8 giờ</option></select></label><div class="toggle-row"><label><input type="checkbox" id="voiceChat" checked> Trò chuyện bằng giọng nói</label><label><input type="checkbox" id="fallMonitor" checked> Theo dõi nguy cơ té ngã</label><label><input type="checkbox" id="restrictedMonitor"> Theo dõi khu vực hạn chế</label></div></details>
+            </div>
+            <div id="mappingOptions" hidden><div class="field-row"><label class="grow">Tầng<select id="floorSelect"><option value="">Chưa tải danh sách tầng</option></select></label><label class="grow wide">Tên bản đồ mới<input id="mapName" placeholder="Ví dụ: Phòng khám tầng 1" maxlength="160"></label></div><label id="workflowField">Quy trình tạo bản đồ<select id="mappingWorkflow"><option value="">Chưa tải quy trình</option></select></label><p id="mappingCatalogHint" class="field-help" hidden>Chưa có quy trình tạo bản đồ. Nhờ người quản lý thiết lập trước khi tiếp tục.</p></div>
+            <details class="plain-details" id="sessionChoices" hidden><summary>Phiên sử dụng trước chưa kết thúc</summary><p>Chỉ kết thúc phiên cũ khi robot đã dừng và bạn muốn bắt đầu lại.</p><label class="checkbox-line"><input type="checkbox" id="reopenExisting"> Kết thúc phiên trước để bắt đầu phiên mới</label></details>
+            <div class="task-progress" id="taskProgress" role="status" aria-live="polite" hidden><span id="progressText">Đang chuẩn bị robot…</span></div>
+            <div class="run-footer"><p id="runHint">Chọn bản đồ để tiếp tục.</p><button class="button primary" id="startRobot">Bắt đầu sử dụng</button></div>
+          </article>
+          <article class="card result-card" id="resultPanel" hidden><div><h2 id="resultTitle">Bước tiếp theo</h2><p id="runResult"></p><p id="sessionExpiry" class="field-help"></p></div><div class="form-actions"><button class="button primary" data-open="mapping" id="openMap">Mở bản đồ</button><button class="button secondary" data-open="camera">Xem camera</button></div></article>
+          <div class="compact-row"><button class="inline-link" data-open="mapping">Mở trang quản lý bản đồ và nhiệm vụ</button><button class="inline-link" data-goto="logs">Xem thông tin hỗ trợ</button></div>
+        </div>
+      </section>
+      <section class="page" id="page-network" aria-labelledby="networkTitle">
+        <div class="page-heading"><div><h1 id="networkTitle">Đổi Wi-Fi cho robot</h1><p>Chỉ cần làm khi đưa robot sang mạng khác. Nếu đã kết nối được robot, bạn có thể bỏ qua.</p></div><button class="button secondary" id="refreshWifi">Cập nhật Wi-Fi</button></div>
+        <article class="card"><div class="card-heading"><div><h2>1. Kết nối máy tính với Wi-Fi của robot</h2><p id="networkLaptopStatus">Đang kiểm tra Wi-Fi máy tính…</p></div></div><form id="laptopWifiForm"><div class="field-row"><label class="grow">Tên Wi-Fi của robot<input id="laptopWifiName" list="laptopNetworks" placeholder="Thường bắt đầu bằng HW…" required><datalist id="laptopNetworks"></datalist></label><label class="grow">Mật khẩu Wi-Fi<input id="laptopWifiPassword" type="password" autocomplete="off" placeholder="Bỏ trống nếu máy tính đã lưu mạng"></label></div><div class="form-actions"><button class="button secondary" id="scanLaptopWifi" type="button">Tìm mạng Wi-Fi</button><button class="button primary" type="submit">Kết nối Wi-Fi máy tính</button></div><p class="field-help">Máy tính sẽ tạm ngắt mạng đang dùng để nối với robot.</p></form><p class="field-help">Sau đó vào <button class="inline-link" data-goto="connect">Kết nối → Tìm robot</button>, kết nối robot rồi quay lại đây.</p><p class="field-help" id="apAddressHint" hidden>Khi máy tính đang nối Wi-Fi HW… của robot, có thể thử địa chỉ mặc định <code>192.168.149.1</code>. Đây là địa chỉ của mạng robot tự phát; cấu hình từng robot có thể khác.</p></article>
+        <article class="card"><div class="card-heading"><div><h2>2. Chọn mạng Internet cho robot</h2><p>Nhập mạng Wi-Fi mà robot và máy tính sẽ cùng sử dụng.</p></div></div><form id="robotWifiForm"><div class="field-row"><label class="grow">Tên mạng Wi-Fi<input id="targetSsid" list="robotNetworks" placeholder="Wi-Fi tại nơi sử dụng robot" required><datalist id="robotNetworks"></datalist></label><label class="grow">Mật khẩu Wi-Fi<input id="targetPassword" type="password" autocomplete="off" placeholder="Mật khẩu của mạng này" required></label></div><div class="form-actions"><button class="button secondary" id="scanRobotWifi" type="button">Tìm mạng từ robot</button><button class="button primary" id="sendRobotWifi" type="submit">Cho robot kết nối mạng này</button></div><p class="field-help" id="robotWifiHint">Kết nối robot và dừng phiên đang chạy trước khi đổi mạng.</p></form></article>
+        <article class="card return-card"><div><h2>3. Đưa máy tính về cùng mạng với robot</h2><p>Chờ robot đổi mạng, kết nối lại máy tính rồi tìm robot.</p></div><div class="form-actions"><button class="button primary" id="returnWifi">Kết nối lại máy tính</button><button class="button secondary" id="rediscover">Tìm lại robot</button></div></article>
+      </section>
+      <section class="page" id="page-logs" aria-labelledby="supportTitle">
+        <div class="page-heading"><div><h1 id="supportTitle">Hỗ trợ</h1><p>Thông tin chẩn đoán dành cho người quản lý và kỹ thuật viên.</p></div></div>
+        <article class="card"><h2>Trạng thái kết nối</h2><p id="supportSummary">Chưa kết nối robot.</p><div class="form-actions"><button class="button secondary" data-goto="connect">Kiểm tra kết nối robot</button><button class="button secondary" data-open="mapping">Mở bản đồ và nhiệm vụ</button></div><details class="plain-details technical-info"><summary>Chi tiết kỹ thuật</summary><pre id="technicalState">Chưa có dữ liệu.</pre><pre id="sessionResult" hidden></pre></details></article>
+        <details class="card plain-details"><summary>Nhật ký kỹ thuật</summary><div class="field-row log-controls"><label>Nguồn nhật ký<select id="logSource"><option value="worker">Xử lý nhiệm vụ</option><option value="voice">Giọng nói</option><option value="gate">Điều khiển chuyển động</option><option value="navigation">Dẫn đường</option><option value="service">Khởi động chương trình</option></select></label><button class="button secondary" id="refreshLogs">Đọc nhật ký</button><span id="logMeta" class="field-help"></span></div><pre id="logOutput" tabindex="0">Chọn nguồn và bấm Đọc nhật ký.</pre></details>
+        <details class="card plain-details"><summary>Hoạt động trong ứng dụng</summary><pre id="activityLog" class="activity-log" tabindex="0">Chưa có thao tác.</pre></details>
+      </section>
+    </div><footer><span id="globalStatus">Sẵn sàng</span><span id="clock"></span></footer>
+  </main><script src="renderer.js"></script>
+</body>
+</html>

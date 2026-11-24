@@ -1,0 +1,31 @@
+name: Build MAR Desktop
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm.cmd ci
+      - run: npm.cmd run check
+      - run: npm.cmd test
+      - run: npm.cmd run test:remote
+      - run: npm.cmd run dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MAR-Desktop-Windows
+          path: dist/MAR-Desktop-*.exe
+          if-no-files-found: error
+          retention-days: 14

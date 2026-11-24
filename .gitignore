@@ -1,0 +1,17 @@
+node_modules/
+dist/
+*.log
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+.venv/
+*.pem
+*.key
+*.pfx
+*.p12
+credentials*.json
+settings.local.json
+screenshots/
+coverage/

@@ -1,0 +1,37 @@
+{
+  "name": "mar-desktop",
+  "version": "0.2.0",
+  "private": true,
+  "description": "MAR Desktop — kết nối Wi-Fi và chạy MentorPi bằng giao diện Windows",
+  "main": "src/main.js",
+  "author": "MediAssistRover",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.js",
+    "test:remote": "python -B -m unittest discover -s test -p test_remote.py",
+    "check": "node scripts/check.js",
+    "prepack": "npm run check",
+    "pack": "electron-builder --win dir --x64 --publish never",
+    "predist": "npm run check",
+    "dist": "electron-builder --win portable --x64 --publish never"
+  },
+  "dependencies": {
+    "ssh2": "1.17.0"
+  },
+  "devDependencies": {
+    "electron": "45.4.1",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "org.mediassistrover.desktop",
+    "productName": "MAR Desktop",
+    "artifactName": "MAR-Desktop-${version}-${arch}.${ext}",
+    "directories": { "output": "dist" },
+    "files": ["src/**/*", "remote/control.py", "package.json"],
+    "asar": true,
+    "win": { "target": ["portable"], "signAndEditExecutable": false },
+    "portable": { "requestExecutionLevel": "user" },
+    "publish": null
+  }
+}
