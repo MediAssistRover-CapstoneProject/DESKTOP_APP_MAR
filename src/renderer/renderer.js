@@ -1,12 +1,24 @@
 'use strict';
 const $ = id => document.getElementById(id);
 const state = {
-  page: 'connect', mode: 'navigation', ssh: false, cloud: false, host: '', settings: {},
+  page: 'connect', mode: 'navigation', session: 0, ssh: false, cloud: false, host: '', settings: {},
   robotStatus: null, snapshot: null, catalogLoaded: false, running: null, startPending: false,
   launching: false, stopping: false, refreshing: false, networkChanging: false, busy: 0, returnSsid: '',
   result: null, lastError: null, activity: []
 };
 const labels = { connect: 'Kết nối', run: 'Sử dụng robot', network: 'Đổi Wi-Fi', logs: 'Hỗ trợ' };
+const publicActions = new Set(['settings', 'login', 'logout']);
+const loginMessages = {
+  ACTION_IN_PROGRESS: 'Thao tác trước chưa hoàn tất. Vui lòng thử lại sau.',
+  ADMIN_REQUIRED: 'Tài khoản này không có quyền quản lý robot. Hãy dùng tài khoản ADMIN đang hoạt động.',
+  AUTH_EXPIRED: 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
+  ADMIN_LOGIN_REQUIRED: 'Đăng nhập bằng tài khoản quản trị để tiếp tục.',
+  INVALID_INPUT: 'Kiểm tra lại tên đăng nhập và mật khẩu.',
+  PASSWORD_CHANGE_REQUIRED: 'Hãy đổi mật khẩu trên trang quản trị trước khi đăng nhập.',
+  BE_UNREACHABLE: 'Chưa kết nối được máy chủ quản lý. Kiểm tra kết nối Internet rồi thử lại.',
+  BE_TIMEOUT: 'Máy chủ phản hồi chậm. Vui lòng thử lại.',
+  STOP_IN_PROGRESS: 'Đang chờ robot dừng. Vui lòng thử lại sau.'
+};
 const issues = {
   SSH_AUTH_FAILED: ['Mật khẩu kết nối chưa đúng. Kiểm tra lại mật khẩu hoặc nhờ người quản lý robot.', 'connect'],
   SSH_CONNECTION_FAILED: ['Chưa kết nối được robot. Kiểm tra robot đã bật và máy tính dùng cùng mạng Wi-Fi.', 'connect'],
@@ -16,9 +28,7 @@ const issues = {
   SSH_PASSWORD_REQUIRED: ['Nhập mật khẩu kết nối robot.', 'connect'],
   INVALID_HOST: ['Nhập địa chỉ robot hoặc chọn một thiết bị tìm thấy trên mạng.', 'connect'],
   LOCAL_HOST_REQUIRED: ['Nhập địa chỉ trong mạng của robot, ví dụ raspberrypi.local hoặc địa chỉ IP.', 'connect'],
-  AUTH_EXPIRED: ['Đăng nhập lại tài khoản quản lý để tiếp tục.', 'run'],
-  ADMIN_LOGIN_REQUIRED: ['Đăng nhập tài khoản quản lý ở phần Sử dụng robot.', 'run'],
-  ADMIN_REQUIRED: ['Tài khoản này không có quyền quản lý robot. Dùng tài khoản quản trị được cấp.', 'run'],
+  INVALID_BE_URL: ['Nhập địa chỉ gốc HTTPS của máy chủ, ví dụ https://example.com.', null],
   OLD_SESSION_OPEN: ['Phiên sử dụng trước chưa kết thúc. Kiểm tra nhiệm vụ cũ hoặc chọn kết thúc phiên trước để bắt đầu lại.', 'run'],
   NAVIGATION_SESSION_ALREADY_OPEN: ['Robot đang có phiên sử dụng bản đồ khác. Kiểm tra và kết thúc phiên cũ trước.', 'run'],
   STACK_ALREADY_RUNNING: ['Chương trình robot đã chạy. Bạn có thể mở bản đồ để tiếp tục sử dụng.', 'mapping'],
@@ -64,12 +74,12 @@ function goAction(target) {
   return { label: target === 'logs' ? 'Xem thông tin hỗ trợ' : 'Đi đến ' + labels[target].toLowerCase(), run: () => tab(target) };
 }
 function showIssue(error) {
+  if (!state.cloud || error.code === 'VIEW_SESSION_CHANGED') return;
   state.lastError = { time: new Date().toISOString(), code: error.code, message: error.message, uncertain: Boolean(error.uncertain) };
   let [message, target] = issues[error.code] || [
     error.code === 'UI_INPUT' ? error.message : 'Chưa hoàn tất thao tác. Kiểm tra thông tin hỗ trợ hoặc nhờ người quản lý kiểm tra.',
     error.code === 'UI_INPUT' ? null : 'logs'
   ];
-  if (error.status === 401 && !state.cloud && error.code !== 'AUTH_EXPIRED') { message = 'Tên đăng nhập hoặc mật khẩu chưa đúng. Kiểm tra lại thông tin tài khoản quản lý.'; target = 'run'; }
   if (error.code === 'REMOTE_TIMEOUT' || error.uncertain) {
     message = 'Chưa nhận được xác nhận. Lệnh có thể đã được gửi; cập nhật trạng thái trước khi bấm lại.';
     target = 'run';
@@ -80,13 +90,24 @@ function showIssue(error) {
   renderSupport();
 }
 function inputError(message) { const error = new Error(message); error.code = 'UI_INPUT'; throw error; }
+function sessionChanged() {
+  const error = new Error('Phiên đăng nhập đã thay đổi.');
+  error.code = 'VIEW_SESSION_CHANGED';
+  return error;
+}
 async function call(name, input) {
+  const session = state.session;
+  const protectedAction = !publicActions.has(name);
+  if (protectedAction && !state.cloud) throw sessionChanged();
   const result = await window.mar[name](input);
+  if (protectedAction && name !== 'changeServer' && session !== state.session) throw sessionChanged();
   if (!result?.ok) {
     const error = new Error(result?.error?.message || 'Thao tác chưa hoàn tất.');
     Object.assign(error, result?.error || {});
     if (['SSH_NOT_CONNECTED', 'SSH_CONNECTION_CLOSED', 'REMOTE_CHANNEL_FAILED'].includes(error.code)) sshBadge(false);
-    if (['ADMIN_LOGIN_REQUIRED', 'AUTH_EXPIRED'].includes(error.code)) cloudBadge(null);
+    if (state.cloud && ['ADMIN_LOGIN_REQUIRED', 'AUTH_EXPIRED'].includes(error.code)) {
+      lockWorkspace(loginMessages[error.code], true);
+    }
     throw error;
   }
   return result.data;
@@ -104,6 +125,7 @@ async function task(button, action) {
   }
 }
 function tab(name) {
+  if (!state.cloud) return;
   state.page = name;
   document.querySelector('.content').scrollTop = 0;
   document.querySelectorAll('[data-tab]').forEach(button => {
@@ -114,7 +136,10 @@ function tab(name) {
   document.querySelectorAll('.page').forEach(page => page.classList.toggle('active', page.id === 'page-' + name));
   $('pageTitle').textContent = labels[name];
   $('notice').hidden = true;
-  if (name === 'run' && state.cloud) cloudStatus().catch(showIssue);
+  if (name === 'run') {
+    if (state.catalogLoaded) cloudStatus().catch(showIssue);
+    else if (!state.refreshing) task($('cloudRefresh'), catalog);
+  }
 }
 function setMode(mode) {
   state.mode = mode;
@@ -143,16 +168,74 @@ function sshBadge(connected, host) {
   $('stopRobot').hidden = !connected;
   renderActions(); renderReadiness(); renderSupport();
 }
-function cloudBadge(summary) {
-  state.cloud = summary?.authenticated === true;
-  if (!state.cloud) { state.snapshot = null; state.catalogLoaded = false; }
-  $('cloudBadge').textContent = state.cloud ? 'Đã đăng nhập' : 'Chưa đăng nhập';
-  $('cloudBadge').className = 'chip ' + (state.cloud ? 'good' : 'neutral');
-  $('cloudIdentity').textContent = state.cloud ? (summary.account?.fullName || summary.account?.username || 'Tài khoản quản lý') : 'Đăng nhập để xem danh sách bản đồ.';
-  $('logout').hidden = !state.cloud; $('loginForm').hidden = state.cloud;
-  $('runSetup').hidden = !state.cloud;
-  document.querySelector('.cloud-card').classList.toggle('signed-in', state.cloud);
-  renderActions(); renderSupport();
+function showLoginMessage(message, error = false) {
+  $('loginMessage').textContent = message;
+  $('loginMessage').classList.toggle('error', error);
+}
+async function loadLoginServer() {
+  try {
+    const result = await call('settings');
+    if (!state.cloud) $('loginServer').textContent = result.settings?.baseUrl || '—';
+    return result;
+  } catch {
+    showLoginMessage('Chưa đọc được địa chỉ máy chủ quản lý.', true);
+  }
+}
+function lockWorkspace(message, error = false) {
+  state.session++;
+  if (state.cloud) {
+    state.cloud = false;
+    Object.assign(state, {
+      host: '', settings: {}, catalogLoaded: false, startPending: false, networkChanging: false,
+      launching: false, stopping: false, refreshing: false,
+      result: null, lastError: null, activity: [], returnSsid: ''
+    });
+    $('cloudIdentity').textContent = '';
+    $('cloudIdentity').removeAttribute('title');
+    $('notice').hidden = true;
+    $('sessionResult').hidden = true;
+    $('sessionResult').textContent = '';
+    $('logOutput').textContent = 'Chọn nguồn và bấm Đọc nhật ký.';
+    $('logMeta').textContent = '';
+    $('activityLog').textContent = 'Chưa có thao tác.';
+    $('globalStatus').textContent = 'Sẵn sàng';
+    $('discoveryList').className = 'empty-state';
+    $('discoveryList').textContent = 'Thiết bị tìm thấy sẽ hiện ở đây.';
+    for (const id of ['robotSelect', 'mapSelect', 'floorSelect', 'mappingWorkflow']) {
+      $(id).replaceChildren(new Option('Chưa tải dữ liệu', ''));
+    }
+    for (const id of ['sshPassword', 'keyPassphrase', 'laptopWifiPassword', 'targetPassword', 'mapName']) $(id).value = '';
+    $('reopenExisting').checked = false;
+    sshBadge(false);
+  }
+  $('appShell').hidden = true;
+  $('loginScreen').hidden = false;
+  $('adminPassword').value = '';
+  $('adminUser').value = '';
+  showLoginMessage(message, error);
+  $('adminUser').focus();
+}
+function openWorkspace(result) {
+  if (result.cloud?.authenticated !== true) inputError(loginMessages.AUTH_EXPIRED);
+  state.session++;
+  state.cloud = true;
+  state.settings = result.settings;
+  const fields = { host: 'host', port: 'port', sshUser: 'username', container: 'container', projectPath: 'projectPath', baseUrl: 'baseUrl', keyPath: 'privateKeyPath' };
+  for (const [id, key] of Object.entries(fields)) $(id).value = state.settings[key] ?? '';
+  $('version').textContent = 'Phiên bản ' + result.version;
+  const account = result.cloud.account;
+  $('cloudIdentity').textContent = account?.fullName || account?.username || 'Tài khoản quản lý';
+  $('cloudIdentity').title = $('cloudIdentity').textContent;
+  sshBadge(result.ssh.connected, result.ssh.host);
+  setMode('navigation');
+  tab('connect');
+  $('loginScreen').hidden = true;
+  $('appShell').hidden = false;
+  $('pageTitle').focus();
+  if (result.ssh.connected) task(null, robotStatus);
+  wifiStatus().catch(error => {
+    if (error.code !== 'VIEW_SESSION_CHANGED') $('laptopSsid').textContent = 'Chưa đọc được';
+  });
 }
 function projectProblem() {
   const result = state.robotStatus;
@@ -264,12 +347,15 @@ async function wifiStatus() {
 }
 async function waitForWifi(ssid) {
   notice('Đang chờ máy tính kết nối mạng ' + ssid + '…');
+  const session = state.session;
   const until = Date.now() + 45000;
   while (Date.now() < until) {
+    if (session !== state.session) throw sessionChanged();
     const status = await wifiStatus();
     if (status.interfaces?.some(item => item.ssid === ssid && item.state === 'connected')) { notice('Máy tính đã kết nối mạng ' + ssid + '.'); return; }
     await new Promise(resolve => setTimeout(resolve, 2500));
   }
+  if (session !== state.session) throw sessionChanged();
   inputError('Chưa xác nhận máy tính đã nối mạng ' + ssid + '. Kiểm tra mật khẩu và sóng Wi-Fi trong cài đặt Windows.');
 }
 async function robotStatus() {
@@ -321,6 +407,7 @@ async function catalog() {
 }
 async function cloudStatus() {
   if (!state.cloud || !$('robotSelect').value || state.refreshing) return;
+  const session = state.session;
   const robotId = $('robotSelect').value;
   state.refreshing = true; renderActions();
   try {
@@ -329,7 +416,9 @@ async function cloudStatus() {
     state.snapshot = snapshot;
     renderReadiness(); renderSupport();
     return state.snapshot;
-  } finally { state.refreshing = false; renderActions(); }
+  } finally {
+    if (session === state.session) { state.refreshing = false; renderActions(); }
+  }
 }
 document.querySelectorAll('[data-tab]').forEach(button => button.addEventListener('click', () => tab(button.dataset.tab)));
 document.querySelectorAll('[data-goto]').forEach(button => button.addEventListener('click', () => tab(button.dataset.goto)));
@@ -378,16 +467,53 @@ $('returnWifi').addEventListener('click', event => task(event.currentTarget, asy
   if (!ssid) inputError('Nhập tên mạng Wi-Fi muốn sử dụng ở bước 2.');
   await call('connectLaptopWifi', { ssid }); await waitForWifi(ssid); await discover(); tab('connect');
 }));
-$('loginForm').addEventListener('submit', event => {
-  event.preventDefault(); task(event.submitter, async () => {
-    try { const result = await call('login', { baseUrl: $('baseUrl').value.trim(), username: $('adminUser').value.trim(), password: $('adminPassword').value }); cloudBadge(result); await catalog(); notice('Đã đăng nhập. Chọn bản đồ và cách sử dụng robot.'); }
-    finally { $('adminPassword').value = ''; }
+$('loginForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  const button = $('loginButton');
+  if (button.disabled) return;
+  const session = state.session;
+  button.disabled = true;
+  button.textContent = 'Đang đăng nhập…';
+  showLoginMessage('');
+  try {
+    await call('login', { username: $('adminUser').value.trim(), password: $('adminPassword').value });
+    const result = await call('settings');
+    if (session === state.session) openWorkspace(result);
+  } catch (error) {
+    if (session !== state.session) return;
+    const message = loginMessages[error.code] || (error.status === 401
+      ? 'Tên đăng nhập hoặc mật khẩu chưa đúng.'
+      : error.code === 'UI_INPUT' ? error.message : 'Chưa đăng nhập được. Vui lòng thử lại.');
+    showLoginMessage(message, true);
+    $('adminPassword').focus();
+  } finally {
+    $('adminPassword').value = '';
+    button.disabled = false;
+    button.textContent = 'Đăng nhập';
+  }
+});
+$('logout').addEventListener('click', event => task(event.currentTarget, async () => {
+  await call('logout');
+  if (state.cloud) lockWorkspace('Đã đăng xuất.');
+}));
+$('serverForm').addEventListener('submit', event => {
+  event.preventDefault();
+  task(event.submitter, async () => {
+    $('loginButton').disabled = true;
+    try {
+      const result = await call('changeServer', { baseUrl: $('baseUrl').value.trim() });
+      if (result.authenticated) { notice('Địa chỉ này đang được sử dụng.'); return; }
+      lockWorkspace('Đã đổi máy chủ. Vui lòng đăng nhập lại.');
+      await loadLoginServer();
+    } finally {
+      $('loginButton').disabled = false;
+    }
   });
 });
-$('logout').addEventListener('click', event => task(event.currentTarget, async () => { await call('logout'); cloudBadge(null); notice('Đã đăng xuất tài khoản quản lý. Chương trình robot vẫn giữ nguyên trạng thái.'); }));
 $('cloudRefresh').addEventListener('click', event => task(event.currentTarget, async () => { if (state.ssh) await robotStatus(); await catalog(); notice(projectProblem() || 'Đã cập nhật thông tin robot và bản đồ.', Boolean(projectProblem())); }));
 $('robotSelect').addEventListener('change', () => { state.snapshot = null; $('reopenExisting').checked = false; renderReadiness(); task(null, cloudStatus); });
 $('startRobot').addEventListener('click', event => task(event.currentTarget, async () => {
+  const session = state.session;
   const input = { robotId: $('robotSelect').value, reopenExisting: $('reopenExisting').checked };
   state.launching = true; state.startPending = true; $('progressText').textContent = 'Đang chuẩn bị robot…'; renderActions();
   try {
@@ -401,19 +527,25 @@ $('startRobot').addEventListener('click', event => task(event.currentTarget, asy
     notice(result.mode === 'mapping' ? 'Đã tạo yêu cầu quét. Mở bản đồ để điều khiển robot và lưu kết quả.' : 'Đã gửi yêu cầu mở phiên. Mở bản đồ để kiểm tra và xác định vị trí robot.', false, goAction('mapping'));
     $('resultPanel').scrollIntoView({ block: 'nearest' });
   } catch (error) {
+    if (session !== state.session) throw error;
     try { if (state.ssh) await robotStatus(); } catch { /* Keep uncertain Start blocked until status can be verified. */ }
-    if (error.uncertain || ['REMOTE_TIMEOUT', 'REMOTE_CHANNEL_FAILED', 'SSH_CONNECTION_CLOSED'].includes(error.code)) state.startPending = true;
+    if (session === state.session && (error.uncertain || ['REMOTE_TIMEOUT', 'REMOTE_CHANNEL_FAILED', 'SSH_CONNECTION_CLOSED'].includes(error.code))) state.startPending = true;
     throw error;
-  } finally { state.launching = false; renderReadiness(); renderActions(); }
+  } finally {
+    if (session === state.session) { state.launching = false; renderReadiness(); renderActions(); }
+  }
 }));
 $('stopRobot').addEventListener('click', event => task(event.currentTarget, async () => {
+  const session = state.session;
   state.stopping = true; $('progressText').textContent = 'Đang chờ robot dừng…'; renderActions(); renderReadiness();
   try {
     const result = await call('stopRobot');
     if (result.state === 'STOPPED') { state.startPending = false; state.running = false; }
     notice(result.state === 'STOPPED' ? 'Chương trình robot đã dừng. Nếu còn nhiệm vụ chưa kết thúc, kiểm tra trên trang bản đồ và nhiệm vụ.' : 'Robot đang dừng. Bấm Cập nhật để kiểm tra trước khi bắt đầu lại.');
     await robotStatus(); if (state.cloud) await cloudStatus();
-  } finally { state.stopping = false; renderReadiness(); renderActions(); }
+  } finally {
+    if (session === state.session) { state.stopping = false; renderReadiness(); renderActions(); }
+  }
 }));
 document.querySelectorAll('[data-open]').forEach(button => button.addEventListener('click', event => task(event.currentTarget, () => call('openPage', { page: button.dataset.open }))));
 $('refreshLogs').addEventListener('click', event => task(event.currentTarget, async () => {
@@ -432,21 +564,27 @@ function userProgress(message) {
   return 'Đang xử lý yêu cầu…';
 }
 window.mar.onProgress?.(message => {
+  if (!state.cloud) return;
   if (message.startsWith('SSH đã ngắt.')) { sshBadge(false); notice('Mất kết nối với robot. Kết nối lại để kiểm tra; chương trình robot có thể vẫn đang chạy.', true, goAction('connect')); return; }
   if (state.launching || state.stopping) { const text = userProgress(message); $('progressText').textContent = text; activity(text); }
+});
+window.mar.onAuthChanged?.(({ authenticated, reason }) => {
+  if (authenticated === false && (state.cloud || reason === 'AUTH_EXPIRED')) {
+    lockWorkspace(loginMessages[reason] || 'Đã đăng xuất.', Boolean(reason));
+  }
 });
 function updateClock() { $('clock').textContent = new Date().toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }); }
 updateClock(); setInterval(updateClock, 30000);
 setInterval(() => {
   if (document.hidden || state.page !== 'run' || !state.cloud || state.launching || state.stopping || state.refreshing) return;
-  cloudStatus().catch(error => { state.lastError = { code: error.code, message: error.message, time: new Date().toISOString() }; $('readiness').textContent = 'Chưa cập nhật được trạng thái · bấm Cập nhật để kiểm tra'; renderSupport(); });
+  cloudStatus().catch(error => {
+    if (!state.cloud || error.code === 'VIEW_SESSION_CHANGED') return;
+    state.lastError = { code: error.code, message: error.message, time: new Date().toISOString() };
+    $('readiness').textContent = 'Chưa cập nhật được trạng thái · bấm Cập nhật để kiểm tra';
+    renderSupport();
+  });
 }, 10000);
-task(null, async () => {
-  const result = await call('settings'); state.settings = result.settings;
-  for (const [id, key] of Object.entries({ host: 'host', port: 'port', sshUser: 'username', container: 'container', projectPath: 'projectPath', baseUrl: 'baseUrl', keyPath: 'privateKeyPath' })) $(id).value = result.settings[key] ?? '';
-  $('version').textContent = 'Phiên bản ' + result.version;
-  sshBadge(result.ssh.connected, result.ssh.host); cloudBadge(result.cloud); setMode('navigation');
-  if (result.ssh.connected) await robotStatus();
-  if (result.cloud.authenticated) await catalog();
-  try { await wifiStatus(); } catch { $('laptopSsid').textContent = 'Chưa đọc được'; }
-});
+const startupSession = state.session;
+loadLoginServer().then(result => {
+  if (startupSession === state.session && result?.cloud?.authenticated) openWorkspace(result);
+}).finally(() => { $('loginButton').disabled = false; });

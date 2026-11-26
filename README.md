@@ -25,10 +25,12 @@ Mở `dist\MAR-Desktop-0.2.0-x64.exe`. Người dùng bản portable không cầ
 
 ## Sử dụng hằng ngày
 
-1. Bật robot, cho máy tính dùng cùng Wi-Fi với robot.
-2. Mở **Kết nối**, nhập mật khẩu robot rồi bấm **Kết nối robot → Tiếp tục**.
-3. Đăng nhập tài khoản quản lý. Chọn **Sử dụng bản đồ có sẵn**, chọn bản đồ và xác nhận robot có gắn thùng hay không.
+1. Mở MAR Desktop khi máy tính có Internet. Nhập tên đăng nhập và mật khẩu của tài khoản **ADMIN** trên màn hình đầu tiên để vào ứng dụng.
+2. Bật robot, cho máy tính dùng cùng Wi-Fi với robot. Mở **Kết nối**, nhập mật khẩu SSH rồi bấm **Kết nối robot → Tiếp tục**.
+3. Chọn **Sử dụng bản đồ có sẵn**, chọn bản đồ và xác nhận robot có gắn thùng hay không.
 4. Bấm **Bắt đầu sử dụng**. Khi ứng dụng yêu cầu, mở bản đồ và xác định vị trí robot.
+
+Khi đăng xuất hoặc hết hạn phiên, ứng dụng trở về màn hình đăng nhập. Để dừng chương trình đang chạy trên robot, dùng thao tác **Dừng robot** khi đã đăng nhập.
 
 Để quét khu vực mới, chọn **Tạo bản đồ mới**, chọn tầng và đặt tên. Nếu hệ thống chỉ có một quy trình quét, ứng dụng tự chọn quy trình đó. Các thông số kỹ thuật nằm trong mục nâng cao; ID và nhật ký nằm trong **Hỗ trợ**.
 
@@ -48,19 +50,19 @@ App không yêu cầu nhập device secret hoặc mật khẩu MQTT. Đăng nh�
 | Tab | Thao tác |
 | --- | --- |
 | Kết nối | Tìm thiết bị hoặc nhập địa chỉ, nhập mật khẩu robot và kiểm tra kết nối. Cổng, user và khóa SSH nằm trong tùy chọn nâng cao. |
-| Sử dụng robot | Đăng nhập, chọn bản đồ có sẵn hoặc tạo bản đồ mới. Xem bước tiếp theo sau khi bắt đầu. |
+| Sử dụng robot | Chọn bản đồ có sẵn hoặc tạo bản đồ mới. Xem bước tiếp theo sau khi bắt đầu. |
 | Đổi Wi‑Fi | Kết nối hotspot HW, cấp mạng Internet cho robot rồi tìm địa chỉ mới. |
-| Hỗ trợ | Chi tiết trạng thái, ID phiên/nhiệm vụ và nhật ký kỹ thuật khi cần xử lý lỗi. |
+| Hỗ trợ | Chi tiết trạng thái, ID phiên/nhiệm vụ, nhật ký kỹ thuật và cài đặt địa chỉ máy chủ. Đổi máy chủ yêu cầu đăng nhập lại. |
 
 ## Cấp mạng qua hotspot HW
 
-1. Khi laptop còn ở Wi‑Fi có Internet, ghi nhớ SSID mạng muốn cấp cho robot. App có thể hiện SSID; mật khẩu cần nhập hoặc dùng profile Windows đã lưu.
+1. Khi laptop còn ở Wi‑Fi có Internet, đăng nhập ADMIN rồi giữ ứng dụng mở. Ghi nhớ SSID mạng muốn cấp cho robot. App có thể hiện SSID; mật khẩu cần nhập hoặc dùng profile Windows đã lưu.
 2. Trong tab **Đổi Wi‑Fi**, nối laptop vào `HW…` của robot. AP của image hãng thường có địa chỉ `192.168.149.1`; nếu robot đã tùy chỉnh, nhập IP AP thực tế.
 3. Sang **Kết nối**, nối SSH tới IP AP, xác minh đúng fingerprint và robot. Nhập thông tin SSH của bạn; app không tích hợp mật khẩu mặc định.
 4. Gửi SSID/mật khẩu mạng đích cho Pi. Helper chỉ đổi cấu hình Wi‑Fi của hãng khi MAR đã dừng; không sửa networking trong container. Việc đổi mạng làm SSH ngắt là bình thường.
 5. Cho laptop quay lại Wi‑Fi đích, chờ Pi nhận IP rồi bấm **Tìm lại robot** và nối SSH lại. Có thể tìm bằng `raspberrypi.local`, `mar-v1.local` nếu tên đó đã được cấu hình, hoặc nhập IP biết được. App không tự đổi hostname Pi.
 
-AP đơn thuần không cung cấp Internet. Trong lúc laptop nối `HW…`, đăng nhập và gọi BE có thể chưa dùng được; hoàn tất nối mạng đích trước khi mở phiên robot. Lệnh Windows nối Wi‑Fi có thể cần profile/mật khẩu hoặc quyền truy cập Wi‑Fi của Windows; app phải đọc lại trạng thái để xác nhận đã nối.
+Hotspot `HW…` thường chỉ có mạng nội bộ. Nếu cần đăng nhập lại khi đang nối `HW…`, hãy dùng mục Wi‑Fi của Windows để trở về mạng có Internet. Hoàn tất nối mạng đích trước khi mở phiên robot. Lệnh Windows nối Wi‑Fi có thể cần profile/mật khẩu hoặc quyền truy cập Wi‑Fi của Windows; app phải đọc lại trạng thái để xác nhận đã nối.
 
 ## Chạy hai chế độ
 

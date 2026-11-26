@@ -179,6 +179,7 @@ class BeClient {
         method, headers, ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
         signal: controller.signal, redirect: 'error'
       });
+      if (response.status === 401 && auth) this.logout();
       const raw = await boundedText(response);
       let data = null;
       if (raw) {
@@ -189,7 +190,6 @@ class BeClient {
         }
       }
       if (!response.ok) {
-        if (response.status === 401 && auth) this.logout();
         throw new BeClientError(response.status === 401 && auth ? 'AUTH_EXPIRED'
           : (typeof data?.error === 'string' ? data.error : 'BE_HTTP_ERROR'),
         response.status === 401 && auth ? 'Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.'
